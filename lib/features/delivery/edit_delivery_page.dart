@@ -1,6 +1,7 @@
 // lib/pages/edit_delivery/EditDeliveryPage.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:printing/printing.dart';
@@ -10,6 +11,7 @@ import 'package:open_filex/open_filex.dart';
 import '../../core/models.dart';
 import '../../core/repository.dart';
 import '../../services/pdf_export.dart';
+import '../../services/localization_service.dart'; // You'll need to create this
 
 class EditDeliveryPage extends StatefulWidget {
   const EditDeliveryPage({super.key, required this.deliveryId});
@@ -45,10 +47,14 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
   ];
   String _selectedThicknessStr = _kThicknessOptions.first; // default '1'
 
+  // Language state
+  String _currentLanguage = 'en'; // Default to English
+
   @override
   void initState() {
     super.initState();
     _load();
+    _loadLanguagePreference();
   }
 
   @override
@@ -67,12 +73,28 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _loadLanguagePreference() async {
+    // Load saved language preference
+    final savedLanguage = await LocalizationService.getSavedLanguage();
+    setState(() {
+      _currentLanguage = savedLanguage;
+    });
+  }
+
   Future<void> _saveHeader() async {
     if (_delivery == null) return;
     final name = _lorryController.text.trim();
     await _repo.updateDelivery(id: _delivery!.id, lorryName: name);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_t('Saved'))));
+  }
+
+  // ---- Localization helper ----
+  String _t(String english, [String? sinhala]) {
+    if (_currentLanguage == 'si' && sinhala != null) {
+      return sinhala;
+    }
+    return english;
   }
 
   // ---- Parsing helpers ----
@@ -122,49 +144,75 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
 
   /// ENTER now saves immediately to the DB so nothing is lost when you switch thickness.
   Future<void> _addEntry() async {
-    final t = _parseNumberOrFraction(_selectedThicknessStr);
-    final l = double.tryParse(_lenCtl.text.trim());
-    final w = double.tryParse(_widthCtl.text.trim());
+  final t = _parseNumberOrFraction(_selectedThicknessStr);
+  final l = double.tryParse(_lenCtl.text.trim());
+  final w = double.tryParse(_widthCtl.text.trim());
 
-    if (t == null || l == null || w == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter valid numbers for thickness, length, width')),
-      );
-      return;
-    }
-
-    // Persist instantly
-    final gid = await _ensureGroupId(t, l);
-    await _repo.addWidths(gid, [w]);
-
-    // Visual last-3 history
-    setState(() {
-      _history.insert(0, (t, l, w));
-      if (_history.length > 3) _history.removeRange(3, _history.length);
-      _widthCtl.clear(); // keep thickness & length; clear only width
-    });
-
-    if (!mounted) return;
+  if (t == null || l == null || w == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saved')),
+      SnackBar(content: Text(_t('Enter valid numbers for thickness, length, width', 
+        'වලංගු ඝනකම, දිග සහ පළල ඇතුලත් කරන්න'))),
     );
+    return;
   }
 
+  // Persist instantly
+  final gid = await _ensureGroupId(t, l);
+  await _repo.addWidths(gid, [w]);
+
+  // Visual last-3 history
+  setState(() {
+    _history.insert(0, (t, l, w));
+    if (_history.length > 3) _history.removeRange(3, _history.length);
+    _lenCtl.clear(); // Clear length input
+    _widthCtl.clear(); // Clear width input
+  });
+
+  if (!mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(_t('Saved', 'සුරකින ලදී'))),
+  );
+}
   void _removeHistoryAt(int i) {
     setState(() {
       _history.removeAt(i);
     });
   }
 
-  /// (Optional) Button remains for manual batching workflows, but instant-save
-  /// already writes on each Enter, so this is usually a no-op now.
+  /// Show confirmation dialog before submitting to backend
+  Future<void> _showSubmitConfirmation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_t('Confirm Submission', 'ඉදිරිපත් කිරීම තහවුරු කරන්න')),
+        content: Text(_t('Are you sure you want to submit to backend?', 
+          'ඔබට ඇත්තටම බැක්එන්ඩ් වෙත ඉදිරිපත් කිරීමට අවශ්‍යද?')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(_t('No', 'නැහැ')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(_t('Yes', 'ඔව්')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _submitAll();
+    }
+  }
+
   Future<void> _submitAll() async {
     if (_history.isEmpty) return;
     // If you still want to push the items in the visual history again, you could
     // re-save them here, but since we already persist on Enter, we just clear.
     setState(() => _history.clear());
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Submitted to backend')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_t('Submitted to backend', 'බැක්එන්ඩ් වෙත ඉදිරිපත් කරන ලදී'))));
   }
 
   // ---------- PDF actions (ALL OPTIONS) ----------
@@ -181,12 +229,13 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
       final path = await _generatePdf();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PDF saved (app storage): $path')),
+        SnackBar(content: Text(_t('PDF saved (app storage): $path', 
+          'PDF ගබඩා කර ඇත (යෙදුම් ගබඩාව): $path'))),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PDF export failed: $e')),
+        SnackBar(content: Text(_t('PDF export failed: $e', 'PDF නිර්යාතය අසාර්ථක විය: $e'))),
       );
     }
   }
@@ -199,7 +248,7 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Share failed: $e')),
+        SnackBar(content: Text(_t('Share failed: $e', 'හුවමාරුව අසාර්ථක විය: $e'))),
       );
     }
   }
@@ -218,12 +267,12 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved to: $savedUri')),
+        SnackBar(content: Text(_t('Saved to: $savedUri', 'ගබඩා කළ ස්ථානය: $savedUri'))),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
+        SnackBar(content: Text(_t('Save failed: $e', 'ගබඩා කිරීම අසාර්ථක විය: $e'))),
       );
     }
   }
@@ -235,7 +284,7 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Open failed: $e')),
+        SnackBar(content: Text(_t('Open failed: $e', 'විවෘත කිරීම අසාර්ථක විය: $e'))),
       );
     }
   }
@@ -249,11 +298,11 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
         0,
         0,
       ),
-      items: const [
-        PopupMenuItem(value: 'generate', child: Text('Generate (app storage)')),
-        PopupMenuItem(value: 'share', child: Text('Share PDF')),
-        PopupMenuItem(value: 'save', child: Text('Save to device…')),
-        PopupMenuItem(value: 'open', child: Text('Open PDF')),
+      items: [
+        PopupMenuItem(value: 'generate', child: Text(_t('Generate (app storage)', 'ජනනය කරන්න (යෙදුම් ගබඩාව)'))),
+        PopupMenuItem(value: 'share', child: Text(_t('Share PDF', 'PDF හුවමාරු කරන්න'))),
+        PopupMenuItem(value: 'save', child: Text(_t('Save to device…', 'උපාංගයේ ගබඩා කරන්න…'))),
+        PopupMenuItem(value: 'open', child: Text(_t('Open PDF', 'PDF විවෘත කරන්න'))),
       ],
     );
 
@@ -273,11 +322,20 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     }
   }
 
+  // Language toggle function
+  Future<void> _toggleLanguage() async {
+    final newLanguage = _currentLanguage == 'en' ? 'si' : 'en';
+    await LocalizationService.saveLanguage(newLanguage);
+    setState(() {
+      _currentLanguage = newLanguage;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_delivery == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Edit Delivery')),
+        appBar: AppBar(title: Text(_t('Edit Delivery', 'භාරදීම සංස්කරණය කරන්න'))),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -285,11 +343,17 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Delivery'),
+        title: Text(_t('Edit Delivery', 'භාරදීම සංස්කරණය කරන්න')),
         actions: [
+          // Language toggle button
+          IconButton(
+            icon: Icon(_currentLanguage == 'en' ? Icons.language : Icons.translate),
+            onPressed: _toggleLanguage,
+            tooltip: _t('Change Language', 'භාෂාව වෙනස් කරන්න'),
+          ),
           // Overflow menu with ALL options
           PopupMenuButton<String>(
-            tooltip: 'PDF Actions',
+            tooltip: _t('PDF Actions', 'PDF ක්‍රියාමාර්ග'),
             onSelected: (v) async {
               switch (v) {
                 case 'generate':
@@ -306,11 +370,11 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                   break;
               }
             },
-            itemBuilder: (ctx) => const [
-              PopupMenuItem(value: 'generate', child: Text('Generate (app storage)')),
-              PopupMenuItem(value: 'share', child: Text('Share PDF')),
-              PopupMenuItem(value: 'save', child: Text('Save to device…')),
-              PopupMenuItem(value: 'open', child: Text('Open PDF')),
+            itemBuilder: (ctx) => [
+              PopupMenuItem(value: 'generate', child: Text(_t('Generate (app storage)', 'ජනනය කරන්න (යෙදුම් ගබඩාව)'))),
+              PopupMenuItem(value: 'share', child: Text(_t('Share PDF', 'PDF හුවමාරු කරන්න'))),
+              PopupMenuItem(value: 'save', child: Text(_t('Save to device…', 'උපාංගයේ ගබඩා කරන්න…'))),
+              PopupMenuItem(value: 'open', child: Text(_t('Open PDF', 'PDF විවෘත කරන්න'))),
             ],
             icon: const Icon(Icons.picture_as_pdf),
           ),
@@ -328,15 +392,18 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                   Expanded(
                     child: TextField(
                       controller: _lorryController,
-                      decoration: const InputDecoration(labelText: 'Lorry name', isDense: true),
+                      decoration: InputDecoration(
+                        labelText: _t('Lorry name', 'ලොරි නම'),
+                        isDense: true
+                      ),
                       onSubmitted: (_) => _saveHeader(),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text('Date: $date', style: const TextStyle(fontSize: 13)),
+                  Text('${_t('Date', 'දිනය')}: $date', style: const TextStyle(fontSize: 13)),
                   const SizedBox(width: 8),
                   IconButton(
-                    tooltip: 'Save',
+                    tooltip: _t('Save', 'සුරකින්න'),
                     onPressed: _saveHeader,
                     icon: const Icon(Icons.save),
                   ),
@@ -363,7 +430,7 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: _history.isEmpty
-                          ? const Center(child: Text('History last 3 (empty)'))
+                          ? Center(child: Text(_t('History last 3 (empty)', 'අවසන් 3 (හිස්)')))
                           : ListView.separated(
                               itemCount: _history.length,
                               separatorBuilder: (_, __) => const Divider(height: 1),
@@ -391,7 +458,9 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                       width: 180,
                       child: DropdownButtonFormField<String>(
                         value: _selectedThicknessStr,
-                        decoration: const InputDecoration(labelText: 'thickness'),
+                        decoration: InputDecoration(
+                          labelText: _t('thickness (trenches)', 'ඝනකම (ට්‍රෙන්ච්)')
+                        ),
                         items: _kThicknessOptions
                             .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                             .toList(),
@@ -411,18 +480,31 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                       Expanded(
                         child: TextField(
                           controller: _lenCtl,
-                          decoration: const InputDecoration(labelText: 'length'),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: _t('length (ft)', 'දිග (අඩි)')
+                          ),
+                          keyboardType: TextInputType.numberWithOptions(decimal: true),
                           textInputAction: TextInputAction.next,
+                          // Allow mobile number pad enter key
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'[0-9\.]')),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: TextField(
                           controller: _widthCtl,
-                          decoration: const InputDecoration(labelText: 'width'),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: _t('width (trenches)', 'පළල (ට්‍රෙන්ච්)')
+                          ),
+                          keyboardType: TextInputType.numberWithOptions(decimal: true),
+                          // Allow mobile number pad enter key to submit
+                          textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _addEntry(),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'[0-9\.]')),
+                          ],
                         ),
                       ),
                     ],
@@ -436,15 +518,15 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                       Expanded(
                         child: FilledButton.tonal(
                           onPressed: () => _addEntry(),
-                          child: const Text('Enter (save)'),
+                          child: Text(_t('Enter (save)', 'ඇතුලත් කරන්න (සුරකින්න)')),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed: _history.isEmpty ? null : _submitAll,
+                          onPressed: _history.isEmpty ? null : _showSubmitConfirmation,
                           icon: const Icon(Icons.cloud_upload),
-                          label: const Text('Submit to Backend'),
+                          label: Text(_t('Submit', 'ඉදිරිපත් කරන්න')),
                         ),
                       ),
                       const SizedBox(width: 12),
