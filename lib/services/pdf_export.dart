@@ -13,8 +13,12 @@ class DeliveryPdfService {
   DeliveryPdfService._();
   static final DeliveryPdfService instance = DeliveryPdfService._();
 
-  String _fmtNum(num n) => (n % 1 == 0) ? n.toInt().toString() : n.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
-  String _shortId(String id) => id.length <= 8 ? id : id.substring(0, 8);
+  String _fmtNum(num n) => (n % 1 == 0)
+      ? n.toInt().toString()
+      : n.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
+
+  String _shortId(String id) =>
+      id.length <= 8 ? id : id.substring(0, 8);
 
   /// Builds and saves the PDF. Returns the saved file path.
   Future<String> exportDeliveryPdf(
@@ -64,103 +68,168 @@ class DeliveryPdfService {
       }
     }
 
+    // ---- Brand colors (brown + amber) ----
+    final cPrimary = PdfColor.fromInt(0xFF5D4037); // deep brown
+    final cOnPrimary = PdfColor.fromInt(0xFFFFFFFF);
+    final cPrimaryContainer = PdfColor.fromInt(0xFFD7CCC8); // light brown
+    final cAccent = PdfColor.fromInt(0xFFFFC107); // amber
+    final cAccentContainer = PdfColor.fromInt(0xFFFFE082); // light amber
+    final cSurface = PdfColor.fromInt(0xFFFFFBF2); // warm off-white
+    final cOnSurface = PdfColor.fromInt(0xFF3E2723); // text on paper
+    final cOutline = PdfColor.fromInt(0xFFBCAAA4); // subtle line
+
     // Build the PDF
     final pdf = pw.Document();
 
-    final dateStr = DateFormat('dd-MM-yyyy HH:mm').format(delivery.date.toLocal());
+    final dateStr =
+        DateFormat('dd-MM-yyyy HH:mm').format(delivery.date.toLocal());
     final idShort = _shortId(delivery.id);
 
     pdf.addPage(
       pw.MultiPage(
         pageTheme: pw.PageTheme(
-          margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 36),
+          margin:
+              const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 36),
           theme: pw.ThemeData.withFont(
             base: pw.Font.helvetica(),
             bold: pw.Font.helveticaBold(),
             italic: pw.Font.helveticaOblique(),
           ),
+          buildBackground: (context) => pw.FullPage(
+            ignoreMargins: true,
+            child: pw.Container(color: cSurface),
+          ),
         ),
         build: (context) => [
-          // Beautiful Header
+          // ======= Branded Header =======
           pw.Container(
             decoration: pw.BoxDecoration(
-              color: PdfColors.blue50,
-              borderRadius: pw.BorderRadius.circular(8),
+              color: cPrimary,
+              borderRadius: pw.BorderRadius.circular(10),
             ),
             padding: const pw.EdgeInsets.all(16),
             child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(
-                  shopHeader,
-                  style: pw.TextStyle(
-                    fontSize: 24,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.blue900,
-                  ),
+                pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            shopHeader,
+                            style: pw.TextStyle(
+                              fontSize: 24,
+                              fontWeight: pw.FontWeight.bold,
+                              color: cOnPrimary,
+                            ),
+                          ),
+                          pw.SizedBox(height: 4),
+                          pw.Text(
+                            'WOOD DELIVERY REPORT',
+                            style: pw.TextStyle(
+                              fontSize: 12,
+                              fontWeight: pw.FontWeight.bold,
+                              letterSpacing: 1.2,
+                              color: cAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: pw.BoxDecoration(
+                        color: cAccent,
+                        borderRadius: pw.BorderRadius.circular(6),
+                      ),
+                      child: pw.Text(
+                        'ID: $idShort',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColor.fromInt(0xFF1A1400),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+                pw.SizedBox(height: 10),
+                pw.Container(height: 2, color: cAccent),
                 pw.SizedBox(height: 8),
-                pw.Text(
-                  'Wood Delivery Report',
-                  style: pw.TextStyle(
-                    fontSize: 16,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.blue700,
-                  ),
-                ),
-                pw.SizedBox(height: 12),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('Lorry: ${delivery.lorryName}', style: pw.TextStyle(fontSize: 12)),
-                        pw.Text('Date: $dateStr', style: pw.TextStyle(fontSize: 12)),
+                        pw.Text('Lorry: ${delivery.lorryName}',
+                            style: pw.TextStyle(
+                                fontSize: 11, color: cOnPrimary)),
+                        pw.Text('Date : $dateStr',
+                            style: pw.TextStyle(
+                                fontSize: 11, color: cOnPrimary)),
                       ],
                     ),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Text('Delivery ID: $idShort', style: pw.TextStyle(fontSize: 10)),
-                        if ((delivery.notes ?? '').trim().isNotEmpty)
-                          pw.Text('Notes: ${delivery.notes}', style: pw.TextStyle(fontSize: 10)),
-                      ],
-                    ),
+                    if ((delivery.notes ?? '').trim().isNotEmpty)
+                      pw.Text('Notes: ${delivery.notes}',
+                          style: pw.TextStyle(
+                              fontSize: 10, color: cOnPrimary)),
                   ],
                 ),
               ],
             ),
           ),
-          pw.SizedBox(height: 20),
 
-          // Body: thickness sections
+          pw.SizedBox(height: 16),
+
+          // ======= Section: Thickness blocks =======
           ...sortedThickness.expand((t) {
             final rows = byThickness[t]!;
             double thicknessTotalTrenches = 0;
-            
             for (final row in rows) {
               thicknessTotalTrenches += row.totalTrenches;
             }
 
             return [
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                padding: const pw.EdgeInsets.symmetric(
+                    vertical: 8, horizontal: 12),
                 decoration: pw.BoxDecoration(
-                  color: PdfColors.grey100,
-                  border: pw.Border.all(width: 0.5, color: PdfColors.grey400),
-                  borderRadius: pw.BorderRadius.circular(4),
+                  color: cPrimaryContainer,
+                  border: pw.Border.all(width: 0.6, color: cOutline),
+                  borderRadius: pw.BorderRadius.circular(6),
                 ),
                 child: pw.Row(
                   children: [
                     pw.Text(
-                      'Thickness: ${_fmtNum(t)} trenches',
-                      style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                      'Thickness: ${_fmtNum(t)}"',
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                        color: cOnSurface,
+                      ),
                     ),
                     pw.Spacer(),
-                    pw.Text(
-                      'Total: ${_fmtNum(thicknessTotalTrenches)} (ft)',
-                      style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: pw.BoxDecoration(
+                        color: cAccentContainer,
+                        borderRadius: pw.BorderRadius.circular(4),
+                        border: pw.Border.all(color: cAccent, width: 0.7),
+                      ),
+                      child: pw.Text(
+                        'Total: ${_fmtNum(thicknessTotalTrenches)} ft',
+                        style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColor.fromInt(0xFF3E2723),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -176,10 +245,12 @@ class DeliveryPdfService {
 
                 return pw.Container(
                   margin: const pw.EdgeInsets.only(bottom: 8),
-                  padding: const pw.EdgeInsets.all(8),
+                  padding: const pw.EdgeInsets.all(10),
                   decoration: pw.BoxDecoration(
-                    border: pw.Border.all(width: 0.3, color: PdfColors.grey300),
-                    borderRadius: pw.BorderRadius.circular(4),
+                    color: PdfColor.fromInt(0xFFFFFFFF),
+                    border:
+                        pw.Border.all(width: 0.35, color: cOutline),
+                    borderRadius: pw.BorderRadius.circular(6),
                   ),
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -187,12 +258,19 @@ class DeliveryPdfService {
                       pw.Row(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text('Length: $lengthStr ft', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(
+                            'Length: $lengthStr ft',
+                            style: pw.TextStyle(
+                                fontSize: 12,
+                                fontWeight: pw.FontWeight.bold,
+                                color: cOnSurface),
+                          ),
                           pw.SizedBox(width: 16),
                           pw.Expanded(
                             child: pw.Text(
                               'Widths: ($widthsStr)',
-                              style: pw.TextStyle(fontSize: 12),
+                              style: pw.TextStyle(
+                                  fontSize: 12, color: cOnSurface),
                             ),
                           ),
                         ],
@@ -200,55 +278,60 @@ class DeliveryPdfService {
                       pw.SizedBox(height: 4),
                       pw.Text(
                         'Total width = $widthsStr = $totalWidthStr',
-                        style: pw.TextStyle(fontSize: 11),
+                        style: pw.TextStyle(
+                            fontSize: 11, color: cOnSurface),
                       ),
                       pw.SizedBox(height: 4),
                       pw.Text(
-                        'Total (ft) = ($totalWidthStr × $lengthStr) ÷ 12 × $t = $trenchesStr (ft)',
-                        style: pw.TextStyle(fontSize: 11),
+                        'Total (ft) = ($totalWidthStr × $lengthStr) ÷ 12 × ${_fmtNum(t)} = $trenchesStr ft',
+                        style: pw.TextStyle(
+                            fontSize: 11, color: cOnSurface),
                       ),
                     ],
                   ),
                 );
               }),
-
               pw.SizedBox(height: 16),
             ];
           }),
 
-          // Grand Total
+          // ======= Grand Total =======
           pw.Container(
-            margin: const pw.EdgeInsets.only(top: 16),
+            margin: const pw.EdgeInsets.only(top: 8),
             padding: const pw.EdgeInsets.all(12),
             decoration: pw.BoxDecoration(
-              color: PdfColors.blue100,
-              border: pw.Border.all(width: 1, color: PdfColors.blue300),
-              borderRadius: pw.BorderRadius.circular(6),
+              color: cAccentContainer,
+              border: pw.Border.all(width: 1, color: cAccent),
+              borderRadius: pw.BorderRadius.circular(8),
             ),
             child: pw.Center(
               child: pw.Text(
-                'GRAND TOTAL: ${_fmtNum(grandTotalTrenches)} (ft)',
+                'GRAND TOTAL: ${_fmtNum(grandTotalTrenches)} ft',
                 style: pw.TextStyle(
                   fontSize: 16,
                   fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.blue900,
+                  color: PdfColor.fromInt(0xFF3E2723),
                 ),
               ),
             ),
           ),
         ],
         footer: (context) => pw.Container(
-          margin: const pw.EdgeInsets.only(top: 16),
+          margin: const pw.EdgeInsets.only(top: 14),
           child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
-                'Dilankara Enterprise - Wood Delivery System',
-                style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+                '$shopHeader • Wood Logger',
+                style: pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColor.fromInt(0xFF6D4C41)),
               ),
               pw.Text(
                 'Page ${context.pageNumber} of ${context.pagesCount} • ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
-                style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+                style: pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColor.fromInt(0xFF6D4C41)),
               ),
             ],
           ),

@@ -168,10 +168,10 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     _widthCtl.clear(); // Clear width input
   });
 
-  if (!mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(_t('Saved', 'සුරකින ලදී'))),
-  );
+  // if (!mounted) return;
+  // ScaffoldMessenger.of(context).showSnackBar(
+  //   SnackBar(content: Text(_t('Saved', 'සුරකින ලදී'))),
+  // );
 }
   void _removeHistoryAt(int i) {
     setState(() {

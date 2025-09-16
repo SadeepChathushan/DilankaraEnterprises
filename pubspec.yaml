@@ -6,6 +6,17 @@ version: 1.0.0+1
 environment:
   sdk: ">=3.3.0 <4.0.0"
 
+
+flutter_native_splash:
+  color: "#FFFFFF"                    # background color
+  image: assets/images/bg1.jpg        # your splash image
+  android_12:
+    color: "#FFFFFF"
+    image: assets/images/bg1.jpg
+  ios: true
+  web: false
+
+
 dependencies:
   flutter:
     sdk: flutter
@@ -26,6 +37,9 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_native_splash: ^2.4.1
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/bg1.jpg

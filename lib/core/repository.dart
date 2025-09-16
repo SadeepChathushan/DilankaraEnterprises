@@ -47,12 +47,26 @@ class Repository {
     }
   }
 
-  Future<void> deleteDelivery(String id) async {
-    final db = await AppDatabase.instance.database;
-    await db.delete('widths', where: 'group_id IN (SELECT id FROM groups WHERE delivery_id = ?)', whereArgs: [id]);
-    await db.delete('groups', where: 'delivery_id = ?', whereArgs: [id]);
-    await db.delete('deliveries', where: 'id = ?', whereArgs: [id]);
-  }
+  // Future<void> deleteDelivery(String id) async {
+  //   final db = await AppDatabase.instance.database;
+  //   await db.delete('widths', where: 'group_id IN (SELECT id FROM groups WHERE delivery_id = ?)', whereArgs: [id]);
+  //   await db.delete('groups', where: 'delivery_id = ?', whereArgs: [id]);
+  //   await db.delete('deliveries', where: 'id = ?', whereArgs: [id]);
+  // }
+
+
+// core/repository.dart
+Future<void> deleteDelivery(String id) async {
+  final db = await AppDatabase.instance.database;
+  await db.transaction((txn) async {
+    // delete children first (your original logic)
+    await txn.delete('widths',
+        where: 'group_id IN (SELECT id FROM groups WHERE delivery_id = ?)',
+        whereArgs: [id]);
+    await txn.delete('groups', where: 'delivery_id = ?', whereArgs: [id]);
+    await txn.delete('deliveries', where: 'id = ?', whereArgs: [id]);
+  });
+}
 
   Future<String> addGroup({required String deliveryId, required double thickness, required double length}) async {
     final db = await AppDatabase.instance.database;

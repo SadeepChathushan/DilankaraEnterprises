@@ -13,18 +13,24 @@ class AppDatabase {
 
   Database? _db;
 
-  Future<Database> get database async {
-    if (_db != null) return _db!;
-    final Directory docs = await getApplicationDocumentsDirectory();
-    final dbPath = p.join(docs.path, _dbName);
-    _db = await openDatabase(
-      dbPath,
-      version: _dbVersion,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
-    return _db!;
-  }
+  // core/db.dart  (your AppDatabase)
+Future<Database> get database async {
+  if (_db != null) return _db!;
+  final Directory docs = await getApplicationDocumentsDirectory();
+  final dbPath = p.join(docs.path, _dbName);
+  _db = await openDatabase(
+    dbPath,
+    version: _dbVersion,
+    // ✅ Ensure ON DELETE CASCADE etc. actually work
+    onConfigure: (db) async {
+      await db.execute('PRAGMA foreign_keys = ON');
+    },
+    onCreate: _onCreate,
+    onUpgrade: _onUpgrade,
+  );
+  return _db!;
+}
+
 
   Future<void> _onCreate(Database db, int version) async {
     // deliveries
