@@ -38,9 +38,11 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
 
   static const List<String> _kThicknessOptions = <String>[
     '1/8',
+    '3/4',
     '1',
     '1 1/8',
     '1 1/4',
+    '1 3/4',
     '1.5',
     '1 3/8',
     '2',

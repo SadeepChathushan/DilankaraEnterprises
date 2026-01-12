@@ -1,21 +1,10 @@
-name: lorry_wood_logger
-description: Simple, offline-first Flutter app to record lorry wood deliveries.
+name: dilankara_enterprises
+description: Dilankara Enterprises.
 publish_to: "none"
 version: 1.0.0+1
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
-
-
-flutter_native_splash:
-  color: "#FFFFFF"                    # background color
-  image: assets/images/Dila.png        # your splash image
-  android_12:
-    color: "#FFFFFF"
-    image: assets/images/Dila.png
-  ios: true
-  web: false
-
 
 dependencies:
   flutter:
@@ -38,8 +27,36 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^4.0.0
   flutter_native_splash: ^2.4.1
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/bg1.jpg
+    - assets/images/dila.png
+
+flutter_native_splash:
+  color: "#000000"
+  image: assets/images/dila.png
+  color_dark: "#000000"
+  image_dark: assets/images/dila.png
+  
+  android_12:
+    color: "#000000"
+    image: assets/images/dila.png
+    icon_background_color: "#E87A0D"
+    
+  android: true
+  ios: true
+  web: false
+  
+  fullscreen: true
+  
+  android_gravity: center
+  ios_content_mode: center
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/dila.png"
+  adaptive_icon_background: "#E87A0D"
+  adaptive_icon_foreground: "assets/images/dila.png"
