@@ -9,10 +9,10 @@ environment:
 
 flutter_native_splash:
   color: "#FFFFFF"                    # background color
-  image: assets/images/bg1.jpg        # your splash image
+  image: assets/images/Dila.png        # your splash image
   android_12:
     color: "#FFFFFF"
-    image: assets/images/bg1.jpg
+    image: assets/images/Dila.png
   ios: true
   web: false
 

@@ -11,7 +11,7 @@ import 'package:open_filex/open_filex.dart';
 import '../../core/models.dart';
 import '../../core/repository.dart';
 import '../../services/pdf_export.dart';
-import '../../services/localization_service.dart'; // You'll need to create this
+import '../../services/localization_service.dart';
 
 class EditDeliveryPage extends StatefulWidget {
   const EditDeliveryPage({super.key, required this.deliveryId});
@@ -25,30 +25,35 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
   final _repo = Repository.instance;
   Delivery? _delivery;
 
-  // Reused to find/create groups on Enter.
   List<WoodGroup> _groups = [];
 
   final _lorryController = TextEditingController();
-
-  // Quick-entry controllers
   final _lenCtl = TextEditingController();
   final _widthCtl = TextEditingController();
 
-  // History (visual only): last 3 tuples (x=thickness, y=length, z=width)
+  final FocusNode _lenFocus = FocusNode();
+  final FocusNode _widthFocus = FocusNode();
+
   final List<(double, double, double)> _history = [];
 
-  // Thickness dropdown values (as strings, including mixed fractions)
   static const List<String> _kThicknessOptions = <String>[
-    '1',
-    '1.5',
     '1/8',
+    '1',
+    '1 1/8',
+    '1 1/4',
+    '1.5',
     '1 3/8',
     '2',
   ];
-  String _selectedThicknessStr = _kThicknessOptions.first; // default '1'
+  String _selectedThicknessStr = _kThicknessOptions.first;
 
-  // Language state
-  String _currentLanguage = 'en'; // Default to English
+  String _currentLanguage = 'en';
+
+  // Color scheme
+  static const Color _primaryOrange = Color(0xFFE87A0D); // rgb(232,122,13)
+  static const Color _darkBackground = Color(0xFF121212);
+  static const Color _cardBackground = Color(0xFF1E1E1E);
+  static const Color _inputBackground = Color(0xFF2A2A2A);
 
   @override
   void initState() {
@@ -62,6 +67,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     _lorryController.dispose();
     _lenCtl.dispose();
     _widthCtl.dispose();
+    _lenFocus.dispose();
+    _widthFocus.dispose();
     super.dispose();
   }
 
@@ -74,7 +81,6 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
   }
 
   Future<void> _loadLanguagePreference() async {
-    // Load saved language preference
     final savedLanguage = await LocalizationService.getSavedLanguage();
     setState(() {
       _currentLanguage = savedLanguage;
@@ -86,10 +92,15 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     final name = _lorryController.text.trim();
     await _repo.updateDelivery(id: _delivery!.id, lorryName: name);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_t('Saved'))));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_t('Saved', 'සුරකින ලදී')),
+        backgroundColor: _primaryOrange,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
-  // ---- Localization helper ----
   String _t(String english, [String? sinhala]) {
     if (_currentLanguage == 'si' && sinhala != null) {
       return sinhala;
@@ -97,15 +108,12 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     return english;
   }
 
-  // ---- Parsing helpers ----
   String _fmt(num n) => (n % 1 == 0) ? n.toInt().toString() : n.toString();
 
-  /// Parses numbers, simple fractions "a/b", and mixed fractions "a b/c".
   double? _parseNumberOrFraction(String raw) {
     final s = raw.trim();
     if (s.isEmpty) return null;
 
-    // mixed fraction: "a b/c"
     if (s.contains(' ')) {
       final parts = s.split(RegExp(r'\s+'));
       if (parts.length != 2) return null;
@@ -115,12 +123,10 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
       return whole + frac;
     }
 
-    // simple fraction: "a/b"
     if (s.contains('/')) {
       return _parseSimpleFraction(s);
     }
 
-    // plain number
     return double.tryParse(s);
   }
 
@@ -133,7 +139,6 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     return a / b;
   }
 
-  // ---- Ensure a group for (thickness, length) and save width immediately ----
   Future<String> _ensureGroupId(double t, double l) async {
     final existing = _groups.where((g) => g.thickness == t && g.length == l);
     if (existing.isNotEmpty) return existing.first.id;
@@ -142,59 +147,66 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     return gid;
   }
 
-  /// ENTER now saves immediately to the DB so nothing is lost when you switch thickness.
   Future<void> _addEntry() async {
-  final t = _parseNumberOrFraction(_selectedThicknessStr);
-  final l = double.tryParse(_lenCtl.text.trim());
-  final w = double.tryParse(_widthCtl.text.trim());
+    final t = _parseNumberOrFraction(_selectedThicknessStr);
+    final l = double.tryParse(_lenCtl.text.trim());
+    final w = double.tryParse(_widthCtl.text.trim());
 
-  if (t == null || l == null || w == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_t('Enter valid numbers for thickness, length, width', 
-        'වලංගු ඝනකම, දිග සහ පළල ඇතුලත් කරන්න'))),
-    );
-    return;
+    if (t == null || l == null || w == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_t('Enter valid numbers for thickness, length, width',
+              'වලංගු ඝනකම, දිග සහ පළල ඇතුලත් කරන්න')),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final gid = await _ensureGroupId(t, l);
+    await _repo.addWidths(gid, [w]);
+
+    setState(() {
+      _history.insert(0, (t, l, w));
+      if (_history.length > 3) _history.removeRange(3, _history.length);
+      _lenCtl.clear();
+      _widthCtl.clear();
+    });
+
+    _lenFocus.requestFocus();
   }
 
-  // Persist instantly
-  final gid = await _ensureGroupId(t, l);
-  await _repo.addWidths(gid, [w]);
-
-  // Visual last-3 history
-  setState(() {
-    _history.insert(0, (t, l, w));
-    if (_history.length > 3) _history.removeRange(3, _history.length);
-    _lenCtl.clear(); // Clear length input
-    _widthCtl.clear(); // Clear width input
-  });
-
-  // if (!mounted) return;
-  // ScaffoldMessenger.of(context).showSnackBar(
-  //   SnackBar(content: Text(_t('Saved', 'සුරකින ලදී'))),
-  // );
-}
   void _removeHistoryAt(int i) {
     setState(() {
       _history.removeAt(i);
     });
   }
 
-  /// Show confirmation dialog before submitting to backend
   Future<void> _showSubmitConfirmation() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(_t('Confirm Submission', 'ඉදිරිපත් කිරීම තහවුරු කරන්න')),
-        content: Text(_t('Are you sure you want to submit to backend?', 
-          'ඔබට ඇත්තටම බැක්එන්ඩ් වෙත ඉදිරිපත් කිරීමට අවශ්‍යද?')),
+        backgroundColor: _cardBackground,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          _t('Confirm Submission', 'ඉදිරිපත් කිරීම තහවුරු කරන්න'),
+          style: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          _t('Are you sure you want to submit to backend?',
+              'ඔබට ඇත්තටම බැක්එන්ඩ් වෙත ඉදිරිපත් කිරීමට අවශ්‍යද?'),
+          style: const TextStyle(color: Colors.white70),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(_t('No', 'නැහැ')),
+            child: Text(_t('No', 'නැහැ'), style: const TextStyle(color: Colors.white70)),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(_t('Yes', 'ඔව්')),
+            style: FilledButton.styleFrom(backgroundColor: _primaryOrange),
+            child: Text(_t('Yes', 'ඔව්'), style: const TextStyle(color: Colors.black)),
           ),
         ],
       ),
@@ -207,18 +219,18 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
 
   Future<void> _submitAll() async {
     if (_history.isEmpty) return;
-    // If you still want to push the items in the visual history again, you could
-    // re-save them here, but since we already persist on Enter, we just clear.
     setState(() => _history.clear());
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_t('Submitted to backend', 'බැක්එන්ඩ් වෙත ඉදිරිපත් කරන ලදී'))));
+      SnackBar(
+        content: Text(_t('Submitted to backend', 'බැක්එන්ඩ් වෙත ඉදිරිපත් කරන ලදී')),
+        backgroundColor: _primaryOrange,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
-  // ---------- PDF actions (ALL OPTIONS) ----------
   Future<String> _generatePdf() async {
-    // Everything is already in DB because of instant-save on Enter.
-    // Just generate from the repository for ALL thickness/length/width.
     final path = await DeliveryPdfService.instance
         .exportDeliveryPdf(widget.deliveryId, shopHeader: 'Shop Header');
     return path;
@@ -229,13 +241,21 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
       final path = await _generatePdf();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t('PDF saved (app storage): $path', 
-          'PDF ගබඩා කර ඇත (යෙදුම් ගබඩාව): $path'))),
+        SnackBar(
+          content: Text(_t('PDF saved (app storage): $path',
+              'PDF ගබඩා කර ඇත (යෙදුම් ගබඩාව): $path')),
+          backgroundColor: _primaryOrange,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t('PDF export failed: $e', 'PDF නිර්යාතය අසාර්ථක විය: $e'))),
+        SnackBar(
+          content: Text(_t('PDF export failed: $e', 'PDF නිර්යාතය අසාර්ථක විය: $e')),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -248,7 +268,11 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t('Share failed: $e', 'හුවමාරුව අසාර්ථක විය: $e'))),
+        SnackBar(
+          content: Text(_t('Share failed: $e', 'හුවමාරුව අසාර්ථක විය: $e')),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -259,7 +283,7 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
       final bytes = await File(path).readAsBytes();
 
       final savedUri = await FileSaver.instance.saveFile(
-        name: p.basenameWithoutExtension(path), // e.g., delivery_326f1570
+        name: p.basenameWithoutExtension(path),
         bytes: bytes,
         ext: 'pdf',
         mimeType: MimeType.pdf,
@@ -267,12 +291,20 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t('Saved to: $savedUri', 'ගබඩා කළ ස්ථානය: $savedUri'))),
+        SnackBar(
+          content: Text(_t('Saved to: $savedUri', 'ගබඩා කළ ස්ථානය: $savedUri')),
+          backgroundColor: _primaryOrange,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t('Save failed: $e', 'ගබඩා කිරීම අසාර්ථක විය: $e'))),
+        SnackBar(
+          content: Text(_t('Save failed: $e', 'ගබඩා කිරීම අසාර්ථක විය: $e')),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -284,7 +316,11 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t('Open failed: $e', 'විවෘත කිරීම අසාර්ථක විය: $e'))),
+        SnackBar(
+          content: Text(_t('Open failed: $e', 'විවෘත කිරීම අසාර්ථක විය: $e')),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -292,6 +328,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
   void _showPdfMenu(Offset? position) async {
     final selected = await showMenu<String>(
       context: context,
+      color: _cardBackground,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       position: RelativeRect.fromLTRB(
         position?.dx ?? MediaQuery.of(context).size.width,
         position?.dy ?? kToolbarHeight,
@@ -299,10 +337,58 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
         0,
       ),
       items: [
-        PopupMenuItem(value: 'generate', child: Text(_t('Generate (app storage)', 'ජනනය කරන්න (යෙදුම් ගබඩාව)'))),
-        PopupMenuItem(value: 'share', child: Text(_t('Share PDF', 'PDF හුවමාරු කරන්න'))),
-        PopupMenuItem(value: 'save', child: Text(_t('Save to device…', 'උපාංගයේ ගබඩා කරන්න…'))),
-        PopupMenuItem(value: 'open', child: Text(_t('Open PDF', 'PDF විවෘත කරන්න'))),
+        PopupMenuItem(
+          value: 'generate',
+          child: Row(
+            children: [
+              const Icon(Icons.save_alt, color: _primaryOrange, size: 20),
+              const SizedBox(width: 12),
+              Text(
+                _t('Generate (app storage)', 'ජනනය කරන්න (යෙදුම් ගබඩාව)'),
+                style: const TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'share',
+          child: Row(
+            children: [
+              const Icon(Icons.share, color: _primaryOrange, size: 20),
+              const SizedBox(width: 12),
+              Text(
+                _t('Share PDF', 'PDF හුවමාරු කරන්න'),
+                style: const TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'save',
+          child: Row(
+            children: [
+              const Icon(Icons.download, color: _primaryOrange, size: 20),
+              const SizedBox(width: 12),
+              Text(
+                _t('Save to device…', 'උපාංගයේ ගබඩා කරන්න…'),
+                style: const TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'open',
+          child: Row(
+            children: [
+              const Icon(Icons.open_in_new, color: _primaryOrange, size: 20),
+              const SizedBox(width: 12),
+              Text(
+                _t('Open PDF', 'PDF විවෘත කරන්න'),
+                style: const TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        ),
       ],
     );
 
@@ -322,7 +408,6 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     }
   }
 
-  // Language toggle function
   Future<void> _toggleLanguage() async {
     final newLanguage = _currentLanguage == 'en' ? 'si' : 'en';
     await LocalizationService.saveLanguage(newLanguage);
@@ -335,216 +420,488 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
   Widget build(BuildContext context) {
     if (_delivery == null) {
       return Scaffold(
-        appBar: AppBar(title: Text(_t('Edit Delivery', 'භාරදීම සංස්කරණය කරන්න'))),
-        body: const Center(child: CircularProgressIndicator()),
+        backgroundColor: _darkBackground,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          elevation: 0,
+          title: Text(
+            _t('Edit Delivery', 'භාරදීම සංස්කරණය කරන්න'),
+            style: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.bold),
+          ),
+          iconTheme: const IconThemeData(color: _primaryOrange),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(color: _primaryOrange),
+        ),
       );
     }
     final date = DateFormat('yyyy-MM-dd HH:mm').format(_delivery!.date.toLocal());
 
     return Scaffold(
+      backgroundColor: _darkBackground,
       appBar: AppBar(
-        title: Text(_t('Edit Delivery', 'භාරදීම සංස්කරණය කරන්න')),
+        backgroundColor: Colors.black,
+        elevation: 4,
+        shadowColor: _primaryOrange.withOpacity(0.3),
+        title: Text(
+          _t('Edit Delivery', 'භාරදීම සංස්කරණය කරන්න'),
+          style: const TextStyle(
+            color: _primaryOrange,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+        iconTheme: const IconThemeData(color: _primaryOrange),
         actions: [
           // Language toggle button
-          IconButton(
-            icon: Icon(_currentLanguage == 'en' ? Icons.language : Icons.translate),
-            onPressed: _toggleLanguage,
-            tooltip: _t('Change Language', 'භාෂාව වෙනස් කරන්න'),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: _cardBackground,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: IconButton(
+              icon: Icon(
+                _currentLanguage == 'en' ? Icons.language : Icons.translate,
+                color: _primaryOrange,
+              ),
+              onPressed: _toggleLanguage,
+              tooltip: _t('Change Language', 'භාෂාව වෙනස් කරන්න'),
+            ),
           ),
-          // Overflow menu with ALL options
-          PopupMenuButton<String>(
-            tooltip: _t('PDF Actions', 'PDF ක්‍රියාමාර්ග'),
-            onSelected: (v) async {
-              switch (v) {
-                case 'generate':
-                  await _exportPdf();
-                  break;
-                case 'share':
-                  await _sharePdf();
-                  break;
-                case 'save':
-                  await _saveToDevice();
-                  break;
-                case 'open':
-                  await _openPdf();
-                  break;
-              }
-            },
-            itemBuilder: (ctx) => [
-              PopupMenuItem(value: 'generate', child: Text(_t('Generate (app storage)', 'ජනනය කරන්න (යෙදුම් ගබඩාව)'))),
-              PopupMenuItem(value: 'share', child: Text(_t('Share PDF', 'PDF හුවමාරු කරන්න'))),
-              PopupMenuItem(value: 'save', child: Text(_t('Save to device…', 'උපාංගයේ ගබඩා කරන්න…'))),
-              PopupMenuItem(value: 'open', child: Text(_t('Open PDF', 'PDF විවෘත කරන්න'))),
-            ],
-            icon: const Icon(Icons.picture_as_pdf),
+          // PDF menu
+          Container(
+            margin: const EdgeInsets.only(left: 4, right: 8),
+            decoration: BoxDecoration(
+              color: _cardBackground,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: PopupMenuButton<String>(
+              tooltip: _t('PDF Actions', 'PDF ක්‍රියාමාර්ග'),
+              icon: const Icon(Icons.picture_as_pdf, color: _primaryOrange),
+              color: _cardBackground,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onSelected: (v) async {
+                switch (v) {
+                  case 'generate':
+                    await _exportPdf();
+                    break;
+                  case 'share':
+                    await _sharePdf();
+                    break;
+                  case 'save':
+                    await _saveToDevice();
+                    break;
+                  case 'open':
+                    await _openPdf();
+                    break;
+                }
+              },
+              itemBuilder: (ctx) => [
+                PopupMenuItem(
+                  value: 'generate',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.save_alt, color: _primaryOrange, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        _t('Generate (app storage)', 'ජනනය කරන්න (යෙදුම් ගබඩාව)'),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'share',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.share, color: _primaryOrange, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        _t('Share PDF', 'PDF හුවමාරු කරන්න'),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'save',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.download, color: _primaryOrange, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        _t('Save to device…', 'උපාංගයේ ගබඩා කරන්න…'),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'open',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.open_in_new, color: _primaryOrange, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        _t('Open PDF', 'PDF විවෘත කරන්න'),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         children: [
-          // ---- Compact header ----
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _lorryController,
-                      decoration: InputDecoration(
-                        labelText: _t('Lorry name', 'ලොරි නම'),
-                        isDense: true
+          // Header Card
+          Container(
+            decoration: BoxDecoration(
+              color: _cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _primaryOrange.withOpacity(0.3), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: _primaryOrange.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.local_shipping, color: _primaryOrange, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      _t('Delivery Information', 'භාරදීම් තොරතුරු'),
+                      style: const TextStyle(
+                        color: _primaryOrange,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
-                      onSubmitted: (_) => _saveHeader(),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _lorryController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: _t('Lorry name', 'ලොරි නම'),
+                    labelStyle: TextStyle(color: _primaryOrange.withOpacity(0.7)),
+                    filled: true,
+                    fillColor: _inputBackground,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: _primaryOrange.withOpacity(0.3)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: _primaryOrange, width: 2),
+                    ),
+                    prefixIcon: const Icon(Icons.drive_eta, color: _primaryOrange),
                   ),
-                  const SizedBox(width: 12),
-                  Text('${_t('Date', 'දිනය')}: $date', style: const TextStyle(fontSize: 13)),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: _t('Save', 'සුරකින්න'),
-                    onPressed: _saveHeader,
-                    icon: const Icon(Icons.save),
-                  ),
-                ],
-              ),
+                  onSubmitted: (_) => _saveHeader(),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today, color: _primaryOrange, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${_t('Date', 'දිනය')}: $date',
+                      style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
+                    ),
+                    const Spacer(),
+                    ElevatedButton.icon(
+                      onPressed: _saveHeader,
+                      icon: const Icon(Icons.save, size: 18),
+                      label: Text(_t('Save', 'සුරකින්න')),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _primaryOrange,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 20),
 
-          // ---- Main quick-entry ----
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                children: [
-                  // History box (visual last 3, the data is already saved)
-                  SizedBox(
-                    height: 200,
-                    width: double.infinity,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade400),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: _history.isEmpty
-                          ? Center(child: Text(_t('History last 3 (empty)', 'අවසන් 3 (හිස්)')))
-                          : ListView.separated(
-                              itemCount: _history.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (ctx, i) {
-                                final e = _history[i];
-                                return ListTile(
-                                  dense: true,
-                                  title: Text('x=${_fmt(e.$1)}   y=${_fmt(e.$2)}   z=${_fmt(e.$3)}'),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.close),
-                                    onPressed: () => _removeHistoryAt(i),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
+          // Main Entry Card
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _primaryOrange, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: _primaryOrange.withOpacity(0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // History Box
+                Container(
+                  height: 220,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: _inputBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _primaryOrange, width: 2),
                   ),
-
-                  const SizedBox(height: 14),
-
-                  // THICKNESS dropdown (rarely changes)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      width: 180,
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedThicknessStr,
-                        decoration: InputDecoration(
-                          labelText: _t('thickness (trenches)', 'ඝනකම (ට්‍රෙන්ච්)')
+                  child: _history.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.history, color: _primaryOrange.withOpacity(0.5), size: 48),
+                              const SizedBox(height: 8),
+                              Text(
+                                _t('History last 3 (empty)', 'අවසන් 3 (හිස්)'),
+                                style: TextStyle(
+                                  color: _primaryOrange.withOpacity(0.7),
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(8),
+                          itemCount: _history.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            color: _primaryOrange.withOpacity(0.3),
+                          ),
+                          itemBuilder: (ctx, i) {
+                            final e = _history[i];
+                            return Container(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: _cardBackground,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: _primaryOrange.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'x=${_fmt(e.$1)}   y=${_fmt(e.$2)}   z=${_fmt(e.$3)}',
+                                      style: const TextStyle(
+                                        color: _primaryOrange,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.redAccent),
+                                    onPressed: () => _removeHistoryAt(i),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
-                        items: _kThicknessOptions
-                            .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                            .toList(),
-                        onChanged: (v) {
-                          if (v == null) return;
-                          setState(() => _selectedThicknessStr = v);
+                ),
+
+                const SizedBox(height: 20),
+
+                // Thickness Dropdown
+                DropdownButtonFormField<String>(
+                  value: _selectedThicknessStr,
+                  decoration: InputDecoration(
+                    labelText: _t('thickness (trenches)', 'ඝනකම (ට්‍රෙන්ච්)'),
+                    filled: true,
+                    fillColor: _inputBackground,
+                    labelStyle: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.w500),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: _primaryOrange.withOpacity(0.5), width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: _primaryOrange, width: 2),
+                    ),
+                    prefixIcon: const Icon(Icons.straighten, color: _primaryOrange),
+                  ),
+                  dropdownColor: _cardBackground,
+                  style: const TextStyle(color: _primaryOrange, fontSize: 16, fontWeight: FontWeight.bold),
+                  icon: const Icon(Icons.arrow_drop_down, color: _primaryOrange),
+                  items: _kThicknessOptions
+                      .map((s) => DropdownMenuItem(
+                            value: s,
+                            child: Text(s),
+                          ))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _selectedThicknessStr = v);
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Length + Width Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _lenCtl,
+                        focusNode: _lenFocus,
+                        style: const TextStyle(color: _primaryOrange, fontSize: 16, fontWeight: FontWeight.bold),
+                        decoration: InputDecoration(
+                          labelText: _t('length (ft)', 'දිග (අඩි)'),
+                          filled: true,
+                          fillColor: _inputBackground,
+                          labelStyle: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.w500),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: _primaryOrange.withOpacity(0.5), width: 1.5),
+                          ),
+                          focusedBorder:  OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: _primaryOrange, width: 2),
+                          ),
+                          prefixIcon: const Icon(Icons.height, color: _primaryOrange),
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textInputAction: TextInputAction.next,
+                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9\.]'))],
+                        onSubmitted: (_) => _widthFocus.requestFocus(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _widthCtl,
+                        focusNode: _widthFocus,
+                        style: const TextStyle(color: _primaryOrange, fontSize: 16, fontWeight: FontWeight.bold),
+                        decoration: InputDecoration(
+                          labelText: _t('width (trenches)', 'පළල (ට්‍රෙන්ච්)'),
+                          filled: true,
+                          fillColor: _inputBackground,
+                          labelStyle: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.w500),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: _primaryOrange.withOpacity(0.5), width: 1.5),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: _primaryOrange, width: 2),
+                          ),
+                          prefixIcon: const Icon(Icons.width_full, color: _primaryOrange),
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textInputAction: TextInputAction.done,
+                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9\.]'))],
+                        onSubmitted: (_) async {
+                          await _addEntry();
+                          _lenFocus.requestFocus();
                         },
                       ),
                     ),
-                  ),
+                  ],
+                ),
 
-                  const SizedBox(height: 12),
+                const SizedBox(height: 20),
 
-                  // LENGTH + WIDTH (change frequently)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _lenCtl,
-                          decoration: InputDecoration(
-                            labelText: _t('length (ft)', 'දිග (අඩි)')
+                // Buttons Row: Enter, Submit, PDF
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _addEntry,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primaryOrange,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          keyboardType: TextInputType.numberWithOptions(decimal: true),
-                          textInputAction: TextInputAction.next,
-                          // Allow mobile number pad enter key
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'[0-9\.]')),
-                          ],
+                        ),
+                        child: Text(
+                          _t('Enter (save)', 'ඇතුලත් කරන්න (සුරකින්න)'),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _widthCtl,
-                          decoration: InputDecoration(
-                            labelText: _t('width (trenches)', 'පළල (ට්‍රෙන්ච්)')
-                          ),
-                          keyboardType: TextInputType.numberWithOptions(decimal: true),
-                          // Allow mobile number pad enter key to submit
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _addEntry(),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'[0-9\.]')),
-                          ],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _history.isEmpty ? null : _showSubmitConfirmation,
+                        icon: const Icon(Icons.cloud_upload, color: Colors.black),
+                        label: Text(
+                          _t('Submit', 'ඉදිරිපත් කරන්න'),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _history.isEmpty ? Colors.grey.shade800 : _primaryOrange,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Enter + Submit + PDF menu button
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.tonal(
-                          onPressed: () => _addEntry(),
-                          child: Text(_t('Enter (save)', 'ඇතුලත් කරන්න (සුරකින්න)')),
+                    ),
+                    const SizedBox(width: 12),
+                    InkResponse(
+                      onTapDown: (d) => _showPdfMenu(d.globalPosition),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: _cardBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _primaryOrange, width: 2),
                         ),
+                        child: const Icon(Icons.picture_as_pdf, color: _primaryOrange, size: 28),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: _history.isEmpty ? null : _showSubmitConfirmation,
-                          icon: const Icon(Icons.cloud_upload),
-                          label: Text(_t('Submit', 'ඉදිරිපත් කරන්න')),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Small PDF menu near the buttons
-                      InkResponse(
-                        onTapDown: (d) => _showPdfMenu(d.globalPosition),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8.0),
-                          child: Icon(Icons.picture_as_pdf),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-
           const SizedBox(height: 20),
         ],
       ),
