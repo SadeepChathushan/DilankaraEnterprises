@@ -18,17 +18,39 @@ class DeliveryPdfService {
       : n.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
 
   // Convert decimal inch to fraction string
+  // String _fmtInchFraction(double value) {
+  //   final whole = value.floor();
+  //   final frac = value - whole;
+
+  //   const denom = 8; // 1/8 inch precision
+  //   final num = (frac * denom).round();
+
+  //   if (num == 0) return whole.toString();
+  //   if (whole == 0) return '$num/$denom';
+  //   return '$whole $num/$denom';
+  // }
+
+
   String _fmtInchFraction(double value) {
-    final whole = value.floor();
-    final frac = value - whole;
+  final whole = value.floor();
+  double frac = value - whole;
 
-    const denom = 8; // 1/8 inch precision
-    final num = (frac * denom).round();
+  if (frac == 0) return whole.toString();
 
-    if (num == 0) return whole.toString();
-    if (whole == 0) return '$num/$denom';
-    return '$whole $num/$denom';
-  }
+  const maxDenom = 8; // 1/8 inch precision
+  int numerator = (frac * maxDenom).round();
+  int denominator = maxDenom;
+
+  // Simplify fraction
+  int gcd(int a, int b) => b == 0 ? a : gcd(b, a % b);
+  final factor = gcd(numerator, denominator);
+  numerator = numerator ~/ factor;
+  denominator = denominator ~/ factor;
+
+  if (whole == 0) return '$numerator/$denominator';
+  return '$whole $numerator/$denominator';
+}
+
 
   String _shortId(String id) => id.length <= 8 ? id : id.substring(0, 8);
 

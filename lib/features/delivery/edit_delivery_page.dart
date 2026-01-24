@@ -44,7 +44,7 @@ final List<(String, double, double, int)> _history = [];
     '1 1/8',
     '1 1/4',
     '1 3/4',
-    '1.5',
+    '1 1/2',
     '1 3/8',
     '2',
   ];
