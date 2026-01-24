@@ -165,4 +165,53 @@ Future<void> deleteDelivery(String id) async {
     final file = await File(path).writeAsString(buffer.toString());
     return file.path;
   }
+
+
+
+
+ Future<void> deleteWidths({
+  required String deliveryId,
+  required double thickness,
+  required double length,
+  required double width,
+  required int count,
+}) async {
+  final db = await AppDatabase.instance.database;
+
+  await db.transaction((txn) async {
+    // 1️⃣ Find group
+    final groups = await txn.query(
+      'groups',
+      where: 'delivery_id = ? AND thickness = ? AND length = ?',
+      whereArgs: [deliveryId, thickness, length],
+      limit: 1,
+    );
+
+    if (groups.isEmpty) return;
+
+    final groupId = groups.first['id'] as String;
+
+    // 2️⃣ Get width row IDs (LIMIT works here)
+    final rows = await txn.query(
+      'widths',
+      columns: ['id'],
+      where: 'group_id = ? AND width = ?',
+      whereArgs: [groupId, width],
+      limit: count,
+    );
+
+    if (rows.isEmpty) return;
+
+    // 3️⃣ Delete by IDs
+    for (final row in rows) {
+      await txn.delete(
+        'widths',
+        where: 'id = ?',
+        whereArgs: [row['id']],
+      );
+    }
+  });
+}
+
+
 }

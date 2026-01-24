@@ -46,24 +46,47 @@ class DeliveryPdfService {
     /// thickness -> rows
     final Map<double, List<_LenRow>> byThickness = {};
 
-    for (final g in groups) {
-      final widths = await repo.getWidths(g.id);
-      final widthValues = widths.map((w) => w.width).toList();
+    // for (final g in groups) {
+    //   final widths = await repo.getWidths(g.id);
+    //   final widthValues = widths.map((w) => w.width).toList();
 
-      final totalWidth = widthValues.fold(0.0, (sum, w) => sum + w);
+    //   final totalWidth = widthValues.fold(0.0, (sum, w) => sum + w);
 
-      /// ✅ ROW: ft² ONLY
-      final areaFt2 = totalWidth * g.length;
+    //   /// ✅ ROW: ft² ONLY
+    //   final areaFt2 = totalWidth * g.length;
 
-      final row = _LenRow(
-        length: g.length,
-        widths: widthValues,
-        totalWidth: totalWidth,
-        areaFt2: areaFt2,
-      );
+    //   final row = _LenRow(
+    //     length: g.length,
+    //     widths: widthValues,
+    //     totalWidth: totalWidth,
+    //     areaFt2: areaFt2,
+    //   );
 
-      byThickness.putIfAbsent(g.thickness, () => []).add(row);
-    }
+    //   byThickness.putIfAbsent(g.thickness, () => []).add(row);
+    // }
+
+
+for (final g in groups) {
+  final widths = await repo.getWidths(g.id);
+
+  // ✅ SKIP groups with no widths
+  if (widths.isEmpty) continue;
+
+  final widthValues = widths.map((w) => w.width).toList();
+  final totalWidth = widthValues.fold(0.0, (sum, w) => sum + w);
+  final areaFt2 = totalWidth * g.length;
+
+  final row = _LenRow(
+    length: g.length,
+    widths: widthValues,
+    totalWidth: totalWidth,
+    areaFt2: areaFt2,
+  );
+
+  byThickness.putIfAbsent(g.thickness, () => []).add(row);
+}
+
+
 
     final sortedThickness = byThickness.keys.toList()..sort();
     for (final t in sortedThickness) {
@@ -414,7 +437,7 @@ final widthsCount = r.widths.length;
     );
 
     final dir = await getApplicationDocumentsDirectory();
-    final fileName = 'delivery_$idShort.pdf';
+    final fileName = '${delivery.lorryName}.pdf';
     final path = p.join(dir.path, fileName);
     final file = File(path);
     await file.writeAsBytes(await pdf.save());

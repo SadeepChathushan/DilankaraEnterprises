@@ -192,62 +192,86 @@ final List<(String, double, double, int)> _history = [];
   _lenFocus.requestFocus();
 }
 
-  void _removeHistoryAt(int i) {
-    setState(() {
-      _history.removeAt(i);
-    });
-  }
+  // void _removeHistoryAt(int i) {
+  //   setState(() {
+  //     _history.removeAt(i);
+  //   });
+  // }
 
-  Future<void> _showSubmitConfirmation() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _cardBackground,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          _t('Confirm Submission', 'ඉදිරිපත් කිරීම තහවුරු කරන්න'),
-          style: const TextStyle(
-              color: _primaryOrange, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          _t('Are you sure you want to submit to backend?',
-              'ඔබට ඇත්තටම බැක්එන්ඩ් වෙත ඉදිරිපත් කිරීමට අවශ්‍යද?'),
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(_t('No', 'නැහැ'),
-                style: const TextStyle(color: Colors.white70)),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: _primaryOrange),
-            child: Text(_t('Yes', 'ඔව්'),
-                style: const TextStyle(color: Colors.black)),
-          ),
-        ],
-      ),
-    );
 
-    if (confirmed == true) {
-      await _submitAll();
-    }
-  }
+Future<void> _removeHistoryAt(int i) async {
+  final e = _history[i];
 
-  Future<void> _submitAll() async {
-    if (_history.isEmpty) return;
-    setState(() => _history.clear());
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content:
-            Text(_t('Submitted to backend', 'බැක්එන්ඩ් වෙත ඉදිරිපත් කරන ලදී')),
-        backgroundColor: _primaryOrange,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
+  final t = _parseNumberOrFraction(e.$1);
+  if (t == null) return;
+
+  await _repo.deleteWidths(
+    deliveryId: widget.deliveryId,
+    thickness: t,
+    length: e.$2,
+    width: e.$3,
+    count: e.$4,
+  );
+
+  if (!mounted) return;
+
+  setState(() {
+    _history.removeAt(i);
+  });
+}
+
+
+
+  // Future<void> _showSubmitConfirmation() async {
+  //   final confirmed = await showDialog<bool>(
+  //     context: context,
+  //     builder: (context) => AlertDialog(
+  //       backgroundColor: _cardBackground,
+  //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  //       title: Text(
+  //         _t('Confirm Submission', 'ඉදිරිපත් කිරීම තහවුරු කරන්න'),
+  //         style: const TextStyle(
+  //             color: _primaryOrange, fontWeight: FontWeight.bold),
+  //       ),
+  //       content: Text(
+  //         _t('Are you sure you want to submit to backend?',
+  //             'ඔබට ඇත්තටම බැක්එන්ඩ් වෙත ඉදිරිපත් කිරීමට අවශ්‍යද?'),
+  //         style: const TextStyle(color: Colors.white70),
+  //       ),
+  //       actions: [
+  //         TextButton(
+  //           onPressed: () => Navigator.of(context).pop(false),
+  //           child: Text(_t('No', 'නැහැ'),
+  //               style: const TextStyle(color: Colors.white70)),
+  //         ),
+  //         FilledButton(
+  //           onPressed: () => Navigator.of(context).pop(true),
+  //           style: FilledButton.styleFrom(backgroundColor: _primaryOrange),
+  //           child: Text(_t('Yes', 'ඔව්'),
+  //               style: const TextStyle(color: Colors.black)),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+
+  //   if (confirmed == true) {
+  //     await _submitAll();
+  //   }
+  // }
+
+  // Future<void> _submitAll() async {
+  //   if (_history.isEmpty) return;
+  //   setState(() => _history.clear());
+  //   if (!mounted) return;
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     SnackBar(
+  //       content:
+  //           Text(_t('Submitted to backend', 'බැක්එන්ඩ් වෙත ඉදිරිපත් කරන ලදී')),
+  //       backgroundColor: _primaryOrange,
+  //       behavior: SnackBarBehavior.floating,
+  //     ),
+  //   );
+  // }
 
   Future<String> _generatePdf() async {
     final path = await DeliveryPdfService.instance
@@ -1028,27 +1052,27 @@ final List<(String, double, double, int)> _history = [];
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed:
-                            _history.isEmpty ? null : _showSubmitConfirmation,
-                        icon:
-                            const Icon(Icons.cloud_upload, color: Colors.black),
-                        label: Text(
-                          _t('Submit', 'ඉදිරිපත් කරන්න'),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _history.isEmpty
-                              ? Colors.grey.shade800
-                              : _primaryOrange,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
+                    // Expanded(
+                    //   child: ElevatedButton.icon(
+                    //     onPressed:
+                    //         _history.isEmpty ? null : _showSubmitConfirmation,
+                    //     icon:
+                    //         const Icon(Icons.cloud_upload, color: Colors.black),
+                    //     label: Text(
+                    //       _t('Submit', 'ඉදිරිපත් කරන්න'),
+                    //       style: const TextStyle(fontWeight: FontWeight.bold),
+                    //     ),
+                    //     style: ElevatedButton.styleFrom(
+                    //       backgroundColor: _history.isEmpty
+                    //           ? Colors.grey.shade800
+                    //           : _primaryOrange,
+                    //       foregroundColor: Colors.black,
+                    //       padding: const EdgeInsets.symmetric(vertical: 14),
+                    //       shape: RoundedRectangleBorder(
+                    //           borderRadius: BorderRadius.circular(12)),
+                    //     ),
+                    //   ),
+                    // ),
                     const SizedBox(width: 12),
                     InkResponse(
                       onTapDown: (d) => _showPdfMenu(d.globalPosition),
