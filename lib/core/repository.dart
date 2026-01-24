@@ -109,7 +109,7 @@ Future<void> deleteDelivery(String id) async {
 
   Future<List<WoodWidth>> getWidths(String groupId) async {
     final db = await AppDatabase.instance.database;
-    final rows = await db.query('widths', where: 'group_id = ?', whereArgs: [groupId], orderBy: 'width');
+    final rows = await db.query('widths', where: 'group_id = ?', whereArgs: [groupId]);
     return rows.map((r) => WoodWidth(
       id: r['id'] as String,
       groupId: r['group_id'] as String,

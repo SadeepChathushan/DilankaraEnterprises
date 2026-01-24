@@ -30,14 +30,15 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
   final _lorryController = TextEditingController();
   final _lenCtl = TextEditingController();
   final _widthCtl = TextEditingController();
+  final _countCtl = TextEditingController(text: '1');
 
   final FocusNode _lenFocus = FocusNode();
   final FocusNode _widthFocus = FocusNode();
 
-  final List<(double, double, double)> _history = [];
+final List<(String, double, double, int)> _history = [];
 
   static const List<String> _kThicknessOptions = <String>[
-    '1/8',
+    '7/8',
     '3/4',
     '1',
     '1 1/8',
@@ -71,6 +72,7 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     _widthCtl.dispose();
     _lenFocus.dispose();
     _widthFocus.dispose();
+    _countCtl.dispose();
     super.dispose();
   }
 
@@ -144,40 +146,51 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
   Future<String> _ensureGroupId(double t, double l) async {
     final existing = _groups.where((g) => g.thickness == t && g.length == l);
     if (existing.isNotEmpty) return existing.first.id;
-    final gid = await _repo.addGroup(deliveryId: widget.deliveryId, thickness: t, length: l);
+    final gid = await _repo.addGroup(
+        deliveryId: widget.deliveryId, thickness: t, length: l);
     _groups = await _repo.getGroups(widget.deliveryId);
     return gid;
   }
 
   Future<void> _addEntry() async {
-    final t = _parseNumberOrFraction(_selectedThicknessStr);
-    final l = double.tryParse(_lenCtl.text.trim());
-    final w = double.tryParse(_widthCtl.text.trim());
+  final tStr = _selectedThicknessStr;  // String for display
+  final t = _parseNumberOrFraction(tStr); // Double for backend
+  final l = double.tryParse(_lenCtl.text.trim());
+  final w = double.tryParse(_widthCtl.text.trim());
+  final count = int.tryParse(_countCtl.text.trim()) ?? 1;
 
-    if (t == null || l == null || w == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_t('Enter valid numbers for thickness, length, width',
-              'වලංගු ඝනකම, දිග සහ පළල ඇතුලත් කරන්න')),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
-    final gid = await _ensureGroupId(t, l);
-    await _repo.addWidths(gid, [w]);
-
-    setState(() {
-      _history.insert(0, (t, l, w));
-      if (_history.length > 3) _history.removeRange(3, _history.length);
-      _lenCtl.clear();
-      _widthCtl.clear();
-    });
-
-    _lenFocus.requestFocus();
+  if (t == null || l == null || w == null || count < 1) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_t(
+            'Enter valid thickness, length, width and count',
+            'වලංගු ඝනකම, දිග, පළල සහ ගණන ඇතුලත් කරන්න')),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return;
   }
+
+  // Add entry to history (keep string for T)
+  setState(() {
+    _history.insert(0, (tStr, l, w, count));
+    if (_history.length > 3) _history.removeRange(3, _history.length);
+    _lenCtl.clear();
+    _widthCtl.clear();
+    _countCtl.text = '1';
+  });
+
+  // Ensure group for backend
+  final gid = await _ensureGroupId(t, l);
+
+  // create list like [w, w, w, ...]
+  final widths = List<double>.filled(count, w);
+
+  await _repo.addWidths(gid, widths);
+
+  _lenFocus.requestFocus();
+}
 
   void _removeHistoryAt(int i) {
     setState(() {
@@ -193,7 +206,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           _t('Confirm Submission', 'ඉදිරිපත් කිරීම තහවුරු කරන්න'),
-          style: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+              color: _primaryOrange, fontWeight: FontWeight.bold),
         ),
         content: Text(
           _t('Are you sure you want to submit to backend?',
@@ -203,12 +217,14 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(_t('No', 'නැහැ'), style: const TextStyle(color: Colors.white70)),
+            child: Text(_t('No', 'නැහැ'),
+                style: const TextStyle(color: Colors.white70)),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(backgroundColor: _primaryOrange),
-            child: Text(_t('Yes', 'ඔව්'), style: const TextStyle(color: Colors.black)),
+            child: Text(_t('Yes', 'ඔව්'),
+                style: const TextStyle(color: Colors.black)),
           ),
         ],
       ),
@@ -225,7 +241,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(_t('Submitted to backend', 'බැක්එන්ඩ් වෙත ඉදිරිපත් කරන ලදී')),
+        content:
+            Text(_t('Submitted to backend', 'බැක්එන්ඩ් වෙත ඉදිරිපත් කරන ලදී')),
         backgroundColor: _primaryOrange,
         behavior: SnackBarBehavior.floating,
       ),
@@ -254,7 +271,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_t('PDF export failed: $e', 'PDF නිර්යාතය අසාර්ථක විය: $e')),
+          content:
+              Text(_t('PDF export failed: $e', 'PDF නිර්යාතය අසාර්ථක විය: $e')),
           backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
         ),
@@ -427,8 +445,9 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
           backgroundColor: Colors.black,
           elevation: 0,
           title: Text(
-            _t('Edit Delivery', 'භාරදීම සංස්කරණය කරන්න'),
-            style: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.bold),
+            _t('Edit Order', 'ඇණවුම සංස්කරණය කරන්න'),
+            style: const TextStyle(
+                color: _primaryOrange, fontWeight: FontWeight.bold),
           ),
           iconTheme: const IconThemeData(color: _primaryOrange),
         ),
@@ -437,7 +456,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
         ),
       );
     }
-    final date = DateFormat('yyyy-MM-dd HH:mm').format(_delivery!.date.toLocal());
+    final date =
+        DateFormat('yyyy-MM-dd HH:mm').format(_delivery!.date.toLocal());
 
     return Scaffold(
       backgroundColor: _darkBackground,
@@ -446,7 +466,7 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
         elevation: 4,
         shadowColor: _primaryOrange.withOpacity(0.3),
         title: Text(
-          _t('Edit Delivery', 'භාරදීම සංස්කරණය කරන්න'),
+          _t('Edit Order', 'ඇණවුම සංස්කරණය කරන්න'),
           style: const TextStyle(
             color: _primaryOrange,
             fontWeight: FontWeight.bold,
@@ -482,7 +502,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
               tooltip: _t('PDF Actions', 'PDF ක්‍රියාමාර්ග'),
               icon: const Icon(Icons.picture_as_pdf, color: _primaryOrange),
               color: _cardBackground,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               onSelected: (v) async {
                 switch (v) {
                   case 'generate':
@@ -504,10 +525,12 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                   value: 'generate',
                   child: Row(
                     children: [
-                      const Icon(Icons.save_alt, color: _primaryOrange, size: 20),
+                      const Icon(Icons.save_alt,
+                          color: _primaryOrange, size: 20),
                       const SizedBox(width: 12),
                       Text(
-                        _t('Generate (app storage)', 'ජනනය කරන්න (යෙදුම් ගබඩාව)'),
+                        _t('Generate (app storage)',
+                            'ජනනය කරන්න (යෙදුම් ගබඩාව)'),
                         style: const TextStyle(color: Colors.white),
                       ),
                     ],
@@ -530,7 +553,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                   value: 'save',
                   child: Row(
                     children: [
-                      const Icon(Icons.download, color: _primaryOrange, size: 20),
+                      const Icon(Icons.download,
+                          color: _primaryOrange, size: 20),
                       const SizedBox(width: 12),
                       Text(
                         _t('Save to device…', 'උපාංගයේ ගබඩා කරන්න…'),
@@ -543,7 +567,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                   value: 'open',
                   child: Row(
                     children: [
-                      const Icon(Icons.open_in_new, color: _primaryOrange, size: 20),
+                      const Icon(Icons.open_in_new,
+                          color: _primaryOrange, size: 20),
                       const SizedBox(width: 12),
                       Text(
                         _t('Open PDF', 'PDF විවෘත කරන්න'),
@@ -557,15 +582,19 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
+     body: SafeArea(
+  child: SingleChildScrollView(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // Header Card
           Container(
             decoration: BoxDecoration(
               color: _cardBackground,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _primaryOrange.withOpacity(0.3), width: 1),
+              border:
+                  Border.all(color: _primaryOrange.withOpacity(0.3), width: 1),
               boxShadow: [
                 BoxShadow(
                   color: _primaryOrange.withOpacity(0.1),
@@ -580,10 +609,11 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.local_shipping, color: _primaryOrange, size: 20),
+                    const Icon(Icons.local_shipping,
+                        color: _primaryOrange, size: 20),
                     const SizedBox(width: 8),
                     Text(
-                      _t('Delivery Information', 'භාරදීම් තොරතුරු'),
+                      _t('Order Details', 'ඇණවුම් විස්තර'),
                       style: const TextStyle(
                         color: _primaryOrange,
                         fontSize: 16,
@@ -598,7 +628,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     labelText: _t('Lorry name', 'ලොරි නම'),
-                    labelStyle: TextStyle(color: _primaryOrange.withOpacity(0.7)),
+                    labelStyle:
+                        TextStyle(color: _primaryOrange.withOpacity(0.7)),
                     filled: true,
                     fillColor: _inputBackground,
                     border: OutlineInputBorder(
@@ -607,24 +638,29 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _primaryOrange.withOpacity(0.3)),
+                      borderSide:
+                          BorderSide(color: _primaryOrange.withOpacity(0.3)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: _primaryOrange, width: 2),
+                      borderSide:
+                          const BorderSide(color: _primaryOrange, width: 2),
                     ),
-                    prefixIcon: const Icon(Icons.drive_eta, color: _primaryOrange),
+                    prefixIcon:
+                        const Icon(Icons.drive_eta, color: _primaryOrange),
                   ),
                   onSubmitted: (_) => _saveHeader(),
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today, color: _primaryOrange, size: 16),
+                    const Icon(Icons.calendar_today,
+                        color: _primaryOrange, size: 16),
                     const SizedBox(width: 8),
                     Text(
                       '${_t('Date', 'දිනය')}: $date',
-                      style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.7), fontSize: 14),
                     ),
                     const Spacer(),
                     ElevatedButton.icon(
@@ -637,7 +673,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
                       ),
                     ),
                   ],
@@ -680,7 +717,9 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.history, color: _primaryOrange.withOpacity(0.5), size: 48),
+                              Icon(Icons.history,
+                                  color: _primaryOrange.withOpacity(0.5),
+                                  size: 48),
                               const SizedBox(height: 8),
                               Text(
                                 _t('History last 3 (empty)', 'අවසන් 3 (හිස්)'),
@@ -708,22 +747,25 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                               decoration: BoxDecoration(
                                 color: _cardBackground,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: _primaryOrange.withOpacity(0.3)),
+                                border: Border.all(
+                                    color: _primaryOrange.withOpacity(0.3)),
                               ),
                               child: Row(
                                 children: [
                                   Expanded(
-                                    child: Text(
-                                      'x=${_fmt(e.$1)}   y=${_fmt(e.$2)}   z=${_fmt(e.$3)}',
-                                      style: const TextStyle(
-                                        color: _primaryOrange,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                  ),
+  child: Text(
+    'T=${e.$1}   L=${_fmt(e.$2)}   W=${_fmt(e.$3)}   C=${e.$4}',
+    style: const TextStyle(
+      color: _primaryOrange,
+      fontWeight: FontWeight.bold,
+      fontSize: 15,
+    ),
+  ),
+),
+
                                   IconButton(
-                                    icon: const Icon(Icons.close, color: Colors.redAccent),
+                                    icon: const Icon(Icons.close,
+                                        color: Colors.redAccent),
                                     onPressed: () => _removeHistoryAt(i),
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
@@ -738,40 +780,133 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                 const SizedBox(height: 20),
 
                 // Thickness Dropdown
-                DropdownButtonFormField<String>(
-                  value: _selectedThicknessStr,
-                  decoration: InputDecoration(
-                    labelText: _t('thickness (trenches)', 'ඝනකම (ට්‍රෙන්ච්)'),
-                    filled: true,
-                    fillColor: _inputBackground,
-                    labelStyle: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.w500),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+                // DropdownButtonFormField<String>(
+                //   value: _selectedThicknessStr,
+                //   decoration: InputDecoration(
+                //     labelText: _t('thickness (trenches)', 'ඝනකම (ට්‍රෙන්ච්)'),
+                //     filled: true,
+                //     fillColor: _inputBackground,
+                //     labelStyle: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.w500),
+                //     border: OutlineInputBorder(
+                //       borderRadius: BorderRadius.circular(12),
+                //       borderSide: BorderSide.none,
+                //     ),
+                //     enabledBorder: OutlineInputBorder(
+                //       borderRadius: BorderRadius.circular(12),
+                //       borderSide: BorderSide(color: _primaryOrange.withOpacity(0.5), width: 1.5),
+                //     ),
+                //     focusedBorder: OutlineInputBorder(
+                //       borderRadius: BorderRadius.circular(12),
+                //       borderSide: const BorderSide(color: _primaryOrange, width: 2),
+                //     ),
+                //     prefixIcon: const Icon(Icons.straighten, color: _primaryOrange),
+                //   ),
+                //   dropdownColor: _cardBackground,
+                //   style: const TextStyle(color: _primaryOrange, fontSize: 16, fontWeight: FontWeight.bold),
+                //   icon: const Icon(Icons.arrow_drop_down, color: _primaryOrange),
+                //   items: _kThicknessOptions
+                //       .map((s) => DropdownMenuItem(
+                //             value: s,
+                //             child: Text(s),
+                //           ))
+                //       .toList(),
+                //   onChanged: (v) {
+                //     if (v == null) return;
+                //     setState(() => _selectedThicknessStr = v);
+                //   },
+                // ),
+
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _selectedThicknessStr,
+                        decoration: InputDecoration(
+                          labelText:
+                              _t('thickness (inches)', 'ඝනකම (ට්‍රෙන්ච්)'),
+                          filled: true,
+                          fillColor: _inputBackground,
+                          labelStyle: const TextStyle(
+                              color: _primaryOrange,
+                              fontWeight: FontWeight.w500),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                                color: _primaryOrange.withOpacity(0.5),
+                                width: 1.5),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                                color: _primaryOrange, width: 2),
+                          ),
+                          prefixIcon: const Icon(Icons.straighten,
+                              color: _primaryOrange),
+                        ),
+                        dropdownColor: _cardBackground,
+                        style: const TextStyle(
+                            color: _primaryOrange,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
+                        icon: const Icon(Icons.arrow_drop_down,
+                            color: _primaryOrange),
+                        items: _kThicknessOptions
+                            .map((s) =>
+                                DropdownMenuItem(value: s, child: Text(s)))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() => _selectedThicknessStr = v);
+                          }
+                        },
+                      ),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _primaryOrange.withOpacity(0.5), width: 1.5),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: TextField(
+                        controller: _countCtl,
+                        style: const TextStyle(
+                            color: _primaryOrange,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16),
+                        decoration: InputDecoration(
+                          labelText: _t('Count', 'ගණන'),
+                          filled: true,
+                          fillColor: _inputBackground,
+                          labelStyle: const TextStyle(
+                              color: _primaryOrange,
+                              fontWeight: FontWeight.w500),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                                color: _primaryOrange.withOpacity(0.5),
+                                width: 1.5),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                                color: _primaryOrange, width: 2),
+                          ),
+                          prefixIcon: const Icon(Icons.format_list_numbered,
+                              color: _primaryOrange),
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                      ),
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: _primaryOrange, width: 2),
-                    ),
-                    prefixIcon: const Icon(Icons.straighten, color: _primaryOrange),
-                  ),
-                  dropdownColor: _cardBackground,
-                  style: const TextStyle(color: _primaryOrange, fontSize: 16, fontWeight: FontWeight.bold),
-                  icon: const Icon(Icons.arrow_drop_down, color: _primaryOrange),
-                  items: _kThicknessOptions
-                      .map((s) => DropdownMenuItem(
-                            value: s,
-                            child: Text(s),
-                          ))
-                      .toList(),
-                  onChanged: (v) {
-                    if (v == null) return;
-                    setState(() => _selectedThicknessStr = v);
-                  },
+                  ],
                 ),
 
                 const SizedBox(height: 16),
@@ -783,29 +918,41 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                       child: TextField(
                         controller: _lenCtl,
                         focusNode: _lenFocus,
-                        style: const TextStyle(color: _primaryOrange, fontSize: 16, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            color: _primaryOrange,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
                         decoration: InputDecoration(
                           labelText: _t('length (ft)', 'දිග (අඩි)'),
                           filled: true,
                           fillColor: _inputBackground,
-                          labelStyle: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.w500),
+                          labelStyle: const TextStyle(
+                              color: _primaryOrange,
+                              fontWeight: FontWeight.w500),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: _primaryOrange.withOpacity(0.5), width: 1.5),
+                            borderSide: BorderSide(
+                                color: _primaryOrange.withOpacity(0.5),
+                                width: 1.5),
                           ),
-                          focusedBorder:  OutlineInputBorder(
+                          focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: _primaryOrange, width: 2),
+                            borderSide:
+                                const BorderSide(color: _primaryOrange, width: 2),
                           ),
-                          prefixIcon: const Icon(Icons.height, color: _primaryOrange),
+                          prefixIcon:
+                              const Icon(Icons.height, color: _primaryOrange),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        // keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: TextInputType.number,
                         textInputAction: TextInputAction.next,
-                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9\.]'))],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9\.]'))
+                        ],
                         onSubmitted: (_) => _widthFocus.requestFocus(),
                       ),
                     ),
@@ -814,29 +961,41 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                       child: TextField(
                         controller: _widthCtl,
                         focusNode: _widthFocus,
-                        style: const TextStyle(color: _primaryOrange, fontSize: 16, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            color: _primaryOrange,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
                         decoration: InputDecoration(
-                          labelText: _t('width (trenches)', 'පළල (ට්‍රෙන්ච්)'),
+                          labelText: _t('width (inches)', 'පළල (ට්‍රෙන්ච්)'),
                           filled: true,
                           fillColor: _inputBackground,
-                          labelStyle: const TextStyle(color: _primaryOrange, fontWeight: FontWeight.w500),
+                          labelStyle: const TextStyle(
+                              color: _primaryOrange,
+                              fontWeight: FontWeight.w500),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: _primaryOrange.withOpacity(0.5), width: 1.5),
+                            borderSide: BorderSide(
+                                color: _primaryOrange.withOpacity(0.5),
+                                width: 1.5),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: _primaryOrange, width: 2),
+                            borderSide:
+                                const BorderSide(color: _primaryOrange, width: 2),
                           ),
-                          prefixIcon: const Icon(Icons.width_full, color: _primaryOrange),
+                          prefixIcon: const Icon(Icons.width_full,
+                              color: _primaryOrange),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                         textInputAction: TextInputAction.done,
-                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9\.]'))],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9\.]'))
+                        ],
                         onSubmitted: (_) async {
                           await _addEntry();
                           _lenFocus.requestFocus();
@@ -871,17 +1030,22 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: _history.isEmpty ? null : _showSubmitConfirmation,
-                        icon: const Icon(Icons.cloud_upload, color: Colors.black),
+                        onPressed:
+                            _history.isEmpty ? null : _showSubmitConfirmation,
+                        icon:
+                            const Icon(Icons.cloud_upload, color: Colors.black),
                         label: Text(
                           _t('Submit', 'ඉදිරිපත් කරන්න'),
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _history.isEmpty ? Colors.grey.shade800 : _primaryOrange,
+                          backgroundColor: _history.isEmpty
+                              ? Colors.grey.shade800
+                              : _primaryOrange,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                     ),
@@ -896,7 +1060,8 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: _primaryOrange, width: 2),
                         ),
-                        child: const Icon(Icons.picture_as_pdf, color: _primaryOrange, size: 28),
+                        child: const Icon(Icons.picture_as_pdf,
+                            color: _primaryOrange, size: 28),
                       ),
                     ),
                   ],
@@ -906,7 +1071,9 @@ class _EditDeliveryPageState extends State<EditDeliveryPage> {
           ),
           const SizedBox(height: 20),
         ],
-      ),
+         ),
+  ),
+),
     );
   }
 }

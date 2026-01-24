@@ -1876,7 +1876,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
-                      'New Delivery',
+                      'New Order',
                       style: Theme.of(ctx)
                           .textTheme
                           .titleLarge
@@ -1942,7 +1942,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Create Delivery', style: TextStyle(fontWeight: FontWeight.w700)),
+                      child: const Text('Create Order', style: TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ),
                 ],
@@ -2099,7 +2099,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             onPressed: _addNew,
             icon: const Icon(Icons.add_rounded),
             label: const Text(
-              'Add Delivery',
+              'Add Order',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             elevation: 0,
@@ -2144,7 +2144,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 Icon(Icons.inventory_2_rounded, size: 28, color: Colors.white),
                 SizedBox(width: 12),
                 Text(
-                  'All Deliveries',
+                  'All Orders',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,

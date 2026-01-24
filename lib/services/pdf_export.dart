@@ -74,31 +74,38 @@ class DeliveryPdfService {
     double grandTotalFt = 0;
     final List<Map<String, dynamic>> thicknessCalcs = [];
 
-    for (final t in sortedThickness) {
-      double thicknessAreaFt2 = 0;
-      for (final r in byThickness[t]!) {
-        thicknessAreaFt2 += r.areaFt2;
-      }
+  for (final t in sortedThickness) {
+  final rows = byThickness[t]!;
 
-      final ft = thicknessAreaFt2 / 12;
-      grandTotalFt += ft;
+  double thicknessAreaFt2 = 0;
+  int thicknessItemCount = 0;
 
-      thicknessCalcs.add({
-        'thickness': t,
-        'areaFt2': thicknessAreaFt2,
-        'ft': ft,
-      });
-    }
+  for (final r in rows) {
+    thicknessAreaFt2 += r.areaFt2;
+    thicknessItemCount += r.widths.length;
+  }
+
+  final ft = thicknessAreaFt2 / 12;
+  grandTotalFt += ft;
+
+  thicknessCalcs.add({
+    'thickness': t,
+    'areaFt2': thicknessAreaFt2,
+    'ft': ft,
+    'items': thicknessItemCount, // optional, but useful
+  });
+}
+
 
     // ---- Colors ----
-    final cPrimary = PdfColor.fromInt(0xFF5D4037);
-    final cOnPrimary = PdfColor.fromInt(0xFFFFFFFF);
-    final cPrimaryContainer = PdfColor.fromInt(0xFFD7CCC8);
-    final cAccent = PdfColor.fromInt(0xFFFFC107);
-    final cAccentContainer = PdfColor.fromInt(0xFFFFE082);
-    final cSurface = PdfColor.fromInt(0xFFFFFBF2);
-    final cOnSurface = PdfColor.fromInt(0xFF3E2723);
-    final cOutline = PdfColor.fromInt(0xFFBCAAA4);
+    const cPrimary = PdfColor.fromInt(0xFF5D4037);
+    const cOnPrimary = PdfColor.fromInt(0xFFFFFFFF);
+    const cPrimaryContainer = PdfColor.fromInt(0xFFD7CCC8);
+    const cAccent = PdfColor.fromInt(0xFFFFC107);
+    const cAccentContainer = PdfColor.fromInt(0xFFFFE082);
+    const cSurface = PdfColor.fromInt(0xFFFFFBF2);
+    const cOnSurface = PdfColor.fromInt(0xFF3E2723);
+    const cOutline = PdfColor.fromInt(0xFFBCAAA4);
 
     final pdf = pw.Document();
 
@@ -217,11 +224,13 @@ class DeliveryPdfService {
             final rows = byThickness[t]!;
 
             double thicknessAreaFt2 = 0;
+            int thicknessItemCount = 0;
             for (final r in rows) {
               thicknessAreaFt2 += r.areaFt2;
+              thicknessItemCount += r.widths.length;
             }
 
-            final thicknessTotalFt = thicknessAreaFt2 / 12;
+            final thicknessTotalFt = (thicknessAreaFt2 / 12).ceil();
 
             return [
               pw.Container(
@@ -252,11 +261,11 @@ class DeliveryPdfService {
                         border: pw.Border.all(color: cAccent, width: 0.7),
                       ),
                       child: pw.Text(
-                        'Total: ${_fmtNum(thicknessTotalFt)} ft',
-                        style: pw.TextStyle(
+                      'Total: ${_fmtNum(thicknessTotalFt)} ft² | Items: $thicknessItemCount',
+                         style: pw.TextStyle(
                           fontSize: 11,
                           fontWeight: pw.FontWeight.bold,
-                          color: PdfColor.fromInt(0xFF3E2723),
+                          color: const PdfColor.fromInt(0xFF3E2723),
                         ),
                       ),
                     ),
@@ -264,54 +273,56 @@ class DeliveryPdfService {
                 ),
               ),
               pw.SizedBox(height: 8),
+...rows.map((r) {
+final widthsComma = r.widths.map(_fmtNum).join(', ');
+final widthsPlus = r.widths.map(_fmtNum).join(' + ');
+final widthsCount = r.widths.length;
 
-              ...rows.map((r) {
-                final widthsStr = r.widths.map(_fmtNum).join(', ');
+  return pw.Container(
+    width: double.infinity,
+    margin: const pw.EdgeInsets.only(bottom: 8),
+    padding: const pw.EdgeInsets.all(10),
+    decoration: pw.BoxDecoration(
+      color: const PdfColor.fromInt(0xFFFFFFFF),
+      border: pw.Border.all(width: 0.35, color: cOutline),
+      borderRadius: pw.BorderRadius.circular(6),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        // ✅ Length on top, widths below
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Length: ${_fmtNum(r.length)} ft',
+              style: pw.TextStyle(
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                  color: cOnSurface),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+            'Widths ($widthsCount): ($widthsComma)',
+              style: const pw.TextStyle(fontSize: 12, color: cOnSurface),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          'Total width = $widthsPlus = ${_fmtNum(r.totalWidth)}',
+          style: const pw.TextStyle(fontSize: 11, color: cOnSurface),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          'Total (ft.inch) = ${_fmtNum(r.totalWidth)} × ${_fmtNum(r.length)} = ${_fmtNum(r.areaFt2)} ft.inch',
+          style: const pw.TextStyle(fontSize: 11, color: cOnSurface),
+        ),
+      ],
+    ),
+  );
+}),
 
-                return pw.Container(
-                  margin: const pw.EdgeInsets.only(bottom: 8),
-                  padding: const pw.EdgeInsets.all(10),
-                  decoration: pw.BoxDecoration(
-                    color: PdfColor.fromInt(0xFFFFFFFF),
-                    border: pw.Border.all(width: 0.35, color: cOutline),
-                    borderRadius: pw.BorderRadius.circular(6),
-                  ),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Row(
-                        children: [
-                          pw.Text(
-                            'Length: ${_fmtNum(r.length)} ft',
-                            style: pw.TextStyle(
-                                fontSize: 12,
-                                fontWeight: pw.FontWeight.bold,
-                                color: cOnSurface),
-                          ),
-                          pw.SizedBox(width: 16),
-                          pw.Expanded(
-                            child: pw.Text(
-                              'Widths: ($widthsStr)',
-                              style: pw.TextStyle(
-                                  fontSize: 12, color: cOnSurface),
-                            ),
-                          ),
-                        ],
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'Total width = $widthsStr = ${_fmtNum(r.totalWidth)}',
-                        style: pw.TextStyle(fontSize: 11, color: cOnSurface),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'Total (ft.inch) = ${_fmtNum(r.totalWidth)} × ${_fmtNum(r.length)} = ${_fmtNum(r.areaFt2)} ft.inch',
-                        style: pw.TextStyle(fontSize: 11, color: cOnSurface),
-                      ),
-                    ],
-                  ),
-                );
-              }),
               pw.SizedBox(height: 16),
             ];
           }),
@@ -377,7 +388,7 @@ class DeliveryPdfService {
                 style: pw.TextStyle(
                   fontSize: 16,
                   fontWeight: pw.FontWeight.bold,
-                  color: PdfColor.fromInt(0xFF3E2723),
+                  color: const PdfColor.fromInt(0xFF3E2723),
                 ),
               ),
             ),
@@ -390,11 +401,11 @@ class DeliveryPdfService {
             children: [
               pw.Text(
                 'Dilankara Enterprises (PVT) Ltd',
-                style: pw.TextStyle(fontSize: 9, color: PdfColor.fromInt(0xFF6D4C41)),
+                style: const pw.TextStyle(fontSize: 9, color: PdfColor.fromInt(0xFF6D4C41)),
               ),
               pw.Text(
                 'Page ${context.pageNumber} of ${context.pagesCount} | ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
-                style: pw.TextStyle(fontSize: 9, color: PdfColor.fromInt(0xFF6D4C41)),
+                style: const pw.TextStyle(fontSize: 9, color: PdfColor.fromInt(0xFF6D4C41)),
               ),
             ],
           ),
